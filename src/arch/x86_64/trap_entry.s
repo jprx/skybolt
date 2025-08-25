@@ -1,0 +1,650 @@
+.code64
+.intel_syntax noprefix
+
+.global jump_to_user
+.global syscall_entry
+.global x86_vectors
+
+#include <defs.h>
+
+.section .text
+x86_dispatch_interrupt:
+  push r15
+  push r14
+  push r13
+  push r12
+  push r11
+  push r10
+  push r9
+  push r8
+  push rbp
+  push rsi
+  push rdi
+  push rdx
+  push rcx
+  push rbx
+  push rax
+
+  mov rdi, rsp
+  call x86_handle_interrupt
+
+  // Interrupts (x86_dispatch_interrupt) flow here after x86_handle_interrupt completes.
+  // New tasks will jump here after the first cswitch that enters the new thread.
+jump_to_user:
+  pop rax
+  pop rbx
+  pop rcx
+  pop rdx
+  pop rdi
+  pop rsi
+  pop rbp
+  pop r8
+  pop r9
+  pop r10
+  pop r11
+  pop r12
+  pop r13
+  pop r14
+  pop r15
+  add rsp, 16 // clean up error code and interrupt number
+  iretq
+
+syscall_entry:
+  mov gs:GS_SAVED_RCX, rcx
+  mov gs:GS_SAVED_RSP, rsp
+
+  // syscalls always enter at the bottom of the kernel stack, so
+  // we can just load rsp0 from the TSS as if we came in via the IDT
+  lea rcx, [rip + tss]
+  mov rcx, [rcx + TSS_RSP0]
+  mov rsp, rcx
+
+  mov  rcx, USER_DS
+  push rcx // ss
+  mov  rcx, gs:GS_SAVED_RSP
+  push rcx // rsp
+  push r11 // rflags
+  mov  rcx, USER_CS
+  push rcx // cs
+  mov  rcx, gs:GS_SAVED_RCX
+  push rcx // rip
+  push 0   // error code (unused for syscalls)
+  push INTR_SYSCALL   // interrupt number (unused for syscalls)
+  push r15
+  push r14
+  push r13
+  push r12
+  push r11
+  push r10
+  push r9
+  push r8
+  push rbp
+  push rsi
+  push rdi
+  push rdx
+  push rcx
+  push rbx
+  push rax
+
+  mov rdi, rsp
+  call x86_handle_syscall
+
+  pop rax
+  pop rbx
+  pop rcx
+  pop rdx
+  pop rdi
+  pop rsi
+  pop rbp
+  pop r8
+  pop r9
+  pop r10
+  pop r11
+  pop r12
+  pop r13
+  pop r14
+  pop r15
+  add rsp, 16 // error code and interrupt number (unused)
+  pop rcx     // rip
+  add rsp, 8  // cs (unused, sysret will set it)
+  pop r11     // rflags
+  pop rsp     // rsp
+  // ss is still on the stack, but it doesn't matter
+
+  sysretq // rip <- rcx; rflags <- r11; cs <- USER_CS (via STAR); ss <- USER_DS (via STAR)
+
+// Push a fake error code since the CPU didn't push one
+.macro DECLARE_INTERRUPT idx
+.global x86_interrupt_\idx
+x86_interrupt_\idx:
+  push 0
+  push \idx
+  jmp x86_dispatch_interrupt
+.endm
+
+// One of the exceptional exception kinds where an error code was already pushed
+// so we shouldn't push another one
+.macro DECLARE_INTERRUPT_WITH_ERROR idx
+x86_interrupt_\idx:
+  push \idx
+  jmp x86_dispatch_interrupt
+.endm
+
+// Processor exceptions
+DECLARE_INTERRUPT             0
+DECLARE_INTERRUPT             1
+DECLARE_INTERRUPT             2
+DECLARE_INTERRUPT             3
+DECLARE_INTERRUPT             4
+DECLARE_INTERRUPT             5
+DECLARE_INTERRUPT             6
+DECLARE_INTERRUPT             7
+DECLARE_INTERRUPT_WITH_ERROR  8
+DECLARE_INTERRUPT             9
+DECLARE_INTERRUPT_WITH_ERROR  10
+DECLARE_INTERRUPT_WITH_ERROR  11
+DECLARE_INTERRUPT_WITH_ERROR  12
+DECLARE_INTERRUPT_WITH_ERROR  13
+DECLARE_INTERRUPT_WITH_ERROR  14
+DECLARE_INTERRUPT             15
+DECLARE_INTERRUPT             16
+DECLARE_INTERRUPT_WITH_ERROR  17
+DECLARE_INTERRUPT             18
+DECLARE_INTERRUPT             19
+DECLARE_INTERRUPT             20
+DECLARE_INTERRUPT_WITH_ERROR  21
+DECLARE_INTERRUPT             22
+DECLARE_INTERRUPT             23
+DECLARE_INTERRUPT             24
+DECLARE_INTERRUPT             25
+DECLARE_INTERRUPT             26
+DECLARE_INTERRUPT             27
+DECLARE_INTERRUPT             28
+DECLARE_INTERRUPT_WITH_ERROR  29
+DECLARE_INTERRUPT_WITH_ERROR  30
+
+// Processor interrupts (technically 32-255) but 31 is not a defined exception
+DECLARE_INTERRUPT 31
+DECLARE_INTERRUPT 32
+DECLARE_INTERRUPT 33
+DECLARE_INTERRUPT 34
+DECLARE_INTERRUPT 35
+DECLARE_INTERRUPT 36
+DECLARE_INTERRUPT 37
+DECLARE_INTERRUPT 38
+DECLARE_INTERRUPT 39
+DECLARE_INTERRUPT 40
+DECLARE_INTERRUPT 41
+DECLARE_INTERRUPT 42
+DECLARE_INTERRUPT 43
+DECLARE_INTERRUPT 44
+DECLARE_INTERRUPT 45
+DECLARE_INTERRUPT 46
+DECLARE_INTERRUPT 47
+DECLARE_INTERRUPT 48
+DECLARE_INTERRUPT 49
+DECLARE_INTERRUPT 50
+DECLARE_INTERRUPT 51
+DECLARE_INTERRUPT 52
+DECLARE_INTERRUPT 53
+DECLARE_INTERRUPT 54
+DECLARE_INTERRUPT 55
+DECLARE_INTERRUPT 56
+DECLARE_INTERRUPT 57
+DECLARE_INTERRUPT 58
+DECLARE_INTERRUPT 59
+DECLARE_INTERRUPT 60
+DECLARE_INTERRUPT 61
+DECLARE_INTERRUPT 62
+DECLARE_INTERRUPT 63
+DECLARE_INTERRUPT 64
+DECLARE_INTERRUPT 65
+DECLARE_INTERRUPT 66
+DECLARE_INTERRUPT 67
+DECLARE_INTERRUPT 68
+DECLARE_INTERRUPT 69
+DECLARE_INTERRUPT 70
+DECLARE_INTERRUPT 71
+DECLARE_INTERRUPT 72
+DECLARE_INTERRUPT 73
+DECLARE_INTERRUPT 74
+DECLARE_INTERRUPT 75
+DECLARE_INTERRUPT 76
+DECLARE_INTERRUPT 77
+DECLARE_INTERRUPT 78
+DECLARE_INTERRUPT 79
+DECLARE_INTERRUPT 80
+DECLARE_INTERRUPT 81
+DECLARE_INTERRUPT 82
+DECLARE_INTERRUPT 83
+DECLARE_INTERRUPT 84
+DECLARE_INTERRUPT 85
+DECLARE_INTERRUPT 86
+DECLARE_INTERRUPT 87
+DECLARE_INTERRUPT 88
+DECLARE_INTERRUPT 89
+DECLARE_INTERRUPT 90
+DECLARE_INTERRUPT 91
+DECLARE_INTERRUPT 92
+DECLARE_INTERRUPT 93
+DECLARE_INTERRUPT 94
+DECLARE_INTERRUPT 95
+DECLARE_INTERRUPT 96
+DECLARE_INTERRUPT 97
+DECLARE_INTERRUPT 98
+DECLARE_INTERRUPT 99
+DECLARE_INTERRUPT 100
+DECLARE_INTERRUPT 101
+DECLARE_INTERRUPT 102
+DECLARE_INTERRUPT 103
+DECLARE_INTERRUPT 104
+DECLARE_INTERRUPT 105
+DECLARE_INTERRUPT 106
+DECLARE_INTERRUPT 107
+DECLARE_INTERRUPT 108
+DECLARE_INTERRUPT 109
+DECLARE_INTERRUPT 110
+DECLARE_INTERRUPT 111
+DECLARE_INTERRUPT 112
+DECLARE_INTERRUPT 113
+DECLARE_INTERRUPT 114
+DECLARE_INTERRUPT 115
+DECLARE_INTERRUPT 116
+DECLARE_INTERRUPT 117
+DECLARE_INTERRUPT 118
+DECLARE_INTERRUPT 119
+DECLARE_INTERRUPT 120
+DECLARE_INTERRUPT 121
+DECLARE_INTERRUPT 122
+DECLARE_INTERRUPT 123
+DECLARE_INTERRUPT 124
+DECLARE_INTERRUPT 125
+DECLARE_INTERRUPT 126
+DECLARE_INTERRUPT 127
+DECLARE_INTERRUPT 128
+DECLARE_INTERRUPT 129
+DECLARE_INTERRUPT 130
+DECLARE_INTERRUPT 131
+DECLARE_INTERRUPT 132
+DECLARE_INTERRUPT 133
+DECLARE_INTERRUPT 134
+DECLARE_INTERRUPT 135
+DECLARE_INTERRUPT 136
+DECLARE_INTERRUPT 137
+DECLARE_INTERRUPT 138
+DECLARE_INTERRUPT 139
+DECLARE_INTERRUPT 140
+DECLARE_INTERRUPT 141
+DECLARE_INTERRUPT 142
+DECLARE_INTERRUPT 143
+DECLARE_INTERRUPT 144
+DECLARE_INTERRUPT 145
+DECLARE_INTERRUPT 146
+DECLARE_INTERRUPT 147
+DECLARE_INTERRUPT 148
+DECLARE_INTERRUPT 149
+DECLARE_INTERRUPT 150
+DECLARE_INTERRUPT 151
+DECLARE_INTERRUPT 152
+DECLARE_INTERRUPT 153
+DECLARE_INTERRUPT 154
+DECLARE_INTERRUPT 155
+DECLARE_INTERRUPT 156
+DECLARE_INTERRUPT 157
+DECLARE_INTERRUPT 158
+DECLARE_INTERRUPT 159
+DECLARE_INTERRUPT 160
+DECLARE_INTERRUPT 161
+DECLARE_INTERRUPT 162
+DECLARE_INTERRUPT 163
+DECLARE_INTERRUPT 164
+DECLARE_INTERRUPT 165
+DECLARE_INTERRUPT 166
+DECLARE_INTERRUPT 167
+DECLARE_INTERRUPT 168
+DECLARE_INTERRUPT 169
+DECLARE_INTERRUPT 170
+DECLARE_INTERRUPT 171
+DECLARE_INTERRUPT 172
+DECLARE_INTERRUPT 173
+DECLARE_INTERRUPT 174
+DECLARE_INTERRUPT 175
+DECLARE_INTERRUPT 176
+DECLARE_INTERRUPT 177
+DECLARE_INTERRUPT 178
+DECLARE_INTERRUPT 179
+DECLARE_INTERRUPT 180
+DECLARE_INTERRUPT 181
+DECLARE_INTERRUPT 182
+DECLARE_INTERRUPT 183
+DECLARE_INTERRUPT 184
+DECLARE_INTERRUPT 185
+DECLARE_INTERRUPT 186
+DECLARE_INTERRUPT 187
+DECLARE_INTERRUPT 188
+DECLARE_INTERRUPT 189
+DECLARE_INTERRUPT 190
+DECLARE_INTERRUPT 191
+DECLARE_INTERRUPT 192
+DECLARE_INTERRUPT 193
+DECLARE_INTERRUPT 194
+DECLARE_INTERRUPT 195
+DECLARE_INTERRUPT 196
+DECLARE_INTERRUPT 197
+DECLARE_INTERRUPT 198
+DECLARE_INTERRUPT 199
+DECLARE_INTERRUPT 200
+DECLARE_INTERRUPT 201
+DECLARE_INTERRUPT 202
+DECLARE_INTERRUPT 203
+DECLARE_INTERRUPT 204
+DECLARE_INTERRUPT 205
+DECLARE_INTERRUPT 206
+DECLARE_INTERRUPT 207
+DECLARE_INTERRUPT 208
+DECLARE_INTERRUPT 209
+DECLARE_INTERRUPT 210
+DECLARE_INTERRUPT 211
+DECLARE_INTERRUPT 212
+DECLARE_INTERRUPT 213
+DECLARE_INTERRUPT 214
+DECLARE_INTERRUPT 215
+DECLARE_INTERRUPT 216
+DECLARE_INTERRUPT 217
+DECLARE_INTERRUPT 218
+DECLARE_INTERRUPT 219
+DECLARE_INTERRUPT 220
+DECLARE_INTERRUPT 221
+DECLARE_INTERRUPT 222
+DECLARE_INTERRUPT 223
+DECLARE_INTERRUPT 224
+DECLARE_INTERRUPT 225
+DECLARE_INTERRUPT 226
+DECLARE_INTERRUPT 227
+DECLARE_INTERRUPT 228
+DECLARE_INTERRUPT 229
+DECLARE_INTERRUPT 230
+DECLARE_INTERRUPT 231
+DECLARE_INTERRUPT 232
+DECLARE_INTERRUPT 233
+DECLARE_INTERRUPT 234
+DECLARE_INTERRUPT 235
+DECLARE_INTERRUPT 236
+DECLARE_INTERRUPT 237
+DECLARE_INTERRUPT 238
+DECLARE_INTERRUPT 239
+DECLARE_INTERRUPT 240
+DECLARE_INTERRUPT 241
+DECLARE_INTERRUPT 242
+DECLARE_INTERRUPT 243
+DECLARE_INTERRUPT 244
+DECLARE_INTERRUPT 245
+DECLARE_INTERRUPT 246
+DECLARE_INTERRUPT 247
+DECLARE_INTERRUPT 248
+DECLARE_INTERRUPT 249
+DECLARE_INTERRUPT 250
+DECLARE_INTERRUPT 251
+DECLARE_INTERRUPT 252
+DECLARE_INTERRUPT 253
+DECLARE_INTERRUPT 254
+DECLARE_INTERRUPT 255
+
+.section .data
+x86_vectors:
+  .quad x86_interrupt_0
+  .quad x86_interrupt_1
+  .quad x86_interrupt_2
+  .quad x86_interrupt_3
+  .quad x86_interrupt_4
+  .quad x86_interrupt_5
+  .quad x86_interrupt_6
+  .quad x86_interrupt_7
+  .quad x86_interrupt_8
+  .quad x86_interrupt_9
+  .quad x86_interrupt_10
+  .quad x86_interrupt_11
+  .quad x86_interrupt_12
+  .quad x86_interrupt_13
+  .quad x86_interrupt_14
+  .quad x86_interrupt_15
+  .quad x86_interrupt_16
+  .quad x86_interrupt_17
+  .quad x86_interrupt_18
+  .quad x86_interrupt_19
+  .quad x86_interrupt_20
+  .quad x86_interrupt_21
+  .quad x86_interrupt_22
+  .quad x86_interrupt_23
+  .quad x86_interrupt_24
+  .quad x86_interrupt_25
+  .quad x86_interrupt_26
+  .quad x86_interrupt_27
+  .quad x86_interrupt_28
+  .quad x86_interrupt_29
+  .quad x86_interrupt_30
+  .quad x86_interrupt_31
+  .quad x86_interrupt_32
+  .quad x86_interrupt_33
+  .quad x86_interrupt_34
+  .quad x86_interrupt_35
+  .quad x86_interrupt_36
+  .quad x86_interrupt_37
+  .quad x86_interrupt_38
+  .quad x86_interrupt_39
+  .quad x86_interrupt_40
+  .quad x86_interrupt_41
+  .quad x86_interrupt_42
+  .quad x86_interrupt_43
+  .quad x86_interrupt_44
+  .quad x86_interrupt_45
+  .quad x86_interrupt_46
+  .quad x86_interrupt_47
+  .quad x86_interrupt_48
+  .quad x86_interrupt_49
+  .quad x86_interrupt_50
+  .quad x86_interrupt_51
+  .quad x86_interrupt_52
+  .quad x86_interrupt_53
+  .quad x86_interrupt_54
+  .quad x86_interrupt_55
+  .quad x86_interrupt_56
+  .quad x86_interrupt_57
+  .quad x86_interrupt_58
+  .quad x86_interrupt_59
+  .quad x86_interrupt_60
+  .quad x86_interrupt_61
+  .quad x86_interrupt_62
+  .quad x86_interrupt_63
+  .quad x86_interrupt_64
+  .quad x86_interrupt_65
+  .quad x86_interrupt_66
+  .quad x86_interrupt_67
+  .quad x86_interrupt_68
+  .quad x86_interrupt_69
+  .quad x86_interrupt_70
+  .quad x86_interrupt_71
+  .quad x86_interrupt_72
+  .quad x86_interrupt_73
+  .quad x86_interrupt_74
+  .quad x86_interrupt_75
+  .quad x86_interrupt_76
+  .quad x86_interrupt_77
+  .quad x86_interrupt_78
+  .quad x86_interrupt_79
+  .quad x86_interrupt_80
+  .quad x86_interrupt_81
+  .quad x86_interrupt_82
+  .quad x86_interrupt_83
+  .quad x86_interrupt_84
+  .quad x86_interrupt_85
+  .quad x86_interrupt_86
+  .quad x86_interrupt_87
+  .quad x86_interrupt_88
+  .quad x86_interrupt_89
+  .quad x86_interrupt_90
+  .quad x86_interrupt_91
+  .quad x86_interrupt_92
+  .quad x86_interrupt_93
+  .quad x86_interrupt_94
+  .quad x86_interrupt_95
+  .quad x86_interrupt_96
+  .quad x86_interrupt_97
+  .quad x86_interrupt_98
+  .quad x86_interrupt_99
+  .quad x86_interrupt_100
+  .quad x86_interrupt_101
+  .quad x86_interrupt_102
+  .quad x86_interrupt_103
+  .quad x86_interrupt_104
+  .quad x86_interrupt_105
+  .quad x86_interrupt_106
+  .quad x86_interrupt_107
+  .quad x86_interrupt_108
+  .quad x86_interrupt_109
+  .quad x86_interrupt_110
+  .quad x86_interrupt_111
+  .quad x86_interrupt_112
+  .quad x86_interrupt_113
+  .quad x86_interrupt_114
+  .quad x86_interrupt_115
+  .quad x86_interrupt_116
+  .quad x86_interrupt_117
+  .quad x86_interrupt_118
+  .quad x86_interrupt_119
+  .quad x86_interrupt_120
+  .quad x86_interrupt_121
+  .quad x86_interrupt_122
+  .quad x86_interrupt_123
+  .quad x86_interrupt_124
+  .quad x86_interrupt_125
+  .quad x86_interrupt_126
+  .quad x86_interrupt_127
+  .quad x86_interrupt_128
+  .quad x86_interrupt_129
+  .quad x86_interrupt_130
+  .quad x86_interrupt_131
+  .quad x86_interrupt_132
+  .quad x86_interrupt_133
+  .quad x86_interrupt_134
+  .quad x86_interrupt_135
+  .quad x86_interrupt_136
+  .quad x86_interrupt_137
+  .quad x86_interrupt_138
+  .quad x86_interrupt_139
+  .quad x86_interrupt_140
+  .quad x86_interrupt_141
+  .quad x86_interrupt_142
+  .quad x86_interrupt_143
+  .quad x86_interrupt_144
+  .quad x86_interrupt_145
+  .quad x86_interrupt_146
+  .quad x86_interrupt_147
+  .quad x86_interrupt_148
+  .quad x86_interrupt_149
+  .quad x86_interrupt_150
+  .quad x86_interrupt_151
+  .quad x86_interrupt_152
+  .quad x86_interrupt_153
+  .quad x86_interrupt_154
+  .quad x86_interrupt_155
+  .quad x86_interrupt_156
+  .quad x86_interrupt_157
+  .quad x86_interrupt_158
+  .quad x86_interrupt_159
+  .quad x86_interrupt_160
+  .quad x86_interrupt_161
+  .quad x86_interrupt_162
+  .quad x86_interrupt_163
+  .quad x86_interrupt_164
+  .quad x86_interrupt_165
+  .quad x86_interrupt_166
+  .quad x86_interrupt_167
+  .quad x86_interrupt_168
+  .quad x86_interrupt_169
+  .quad x86_interrupt_170
+  .quad x86_interrupt_171
+  .quad x86_interrupt_172
+  .quad x86_interrupt_173
+  .quad x86_interrupt_174
+  .quad x86_interrupt_175
+  .quad x86_interrupt_176
+  .quad x86_interrupt_177
+  .quad x86_interrupt_178
+  .quad x86_interrupt_179
+  .quad x86_interrupt_180
+  .quad x86_interrupt_181
+  .quad x86_interrupt_182
+  .quad x86_interrupt_183
+  .quad x86_interrupt_184
+  .quad x86_interrupt_185
+  .quad x86_interrupt_186
+  .quad x86_interrupt_187
+  .quad x86_interrupt_188
+  .quad x86_interrupt_189
+  .quad x86_interrupt_190
+  .quad x86_interrupt_191
+  .quad x86_interrupt_192
+  .quad x86_interrupt_193
+  .quad x86_interrupt_194
+  .quad x86_interrupt_195
+  .quad x86_interrupt_196
+  .quad x86_interrupt_197
+  .quad x86_interrupt_198
+  .quad x86_interrupt_199
+  .quad x86_interrupt_200
+  .quad x86_interrupt_201
+  .quad x86_interrupt_202
+  .quad x86_interrupt_203
+  .quad x86_interrupt_204
+  .quad x86_interrupt_205
+  .quad x86_interrupt_206
+  .quad x86_interrupt_207
+  .quad x86_interrupt_208
+  .quad x86_interrupt_209
+  .quad x86_interrupt_210
+  .quad x86_interrupt_211
+  .quad x86_interrupt_212
+  .quad x86_interrupt_213
+  .quad x86_interrupt_214
+  .quad x86_interrupt_215
+  .quad x86_interrupt_216
+  .quad x86_interrupt_217
+  .quad x86_interrupt_218
+  .quad x86_interrupt_219
+  .quad x86_interrupt_220
+  .quad x86_interrupt_221
+  .quad x86_interrupt_222
+  .quad x86_interrupt_223
+  .quad x86_interrupt_224
+  .quad x86_interrupt_225
+  .quad x86_interrupt_226
+  .quad x86_interrupt_227
+  .quad x86_interrupt_228
+  .quad x86_interrupt_229
+  .quad x86_interrupt_230
+  .quad x86_interrupt_231
+  .quad x86_interrupt_232
+  .quad x86_interrupt_233
+  .quad x86_interrupt_234
+  .quad x86_interrupt_235
+  .quad x86_interrupt_236
+  .quad x86_interrupt_237
+  .quad x86_interrupt_238
+  .quad x86_interrupt_239
+  .quad x86_interrupt_240
+  .quad x86_interrupt_241
+  .quad x86_interrupt_242
+  .quad x86_interrupt_243
+  .quad x86_interrupt_244
+  .quad x86_interrupt_245
+  .quad x86_interrupt_246
+  .quad x86_interrupt_247
+  .quad x86_interrupt_248
+  .quad x86_interrupt_249
+  .quad x86_interrupt_250
+  .quad x86_interrupt_251
+  .quad x86_interrupt_252
+  .quad x86_interrupt_253
+  .quad x86_interrupt_254
+  .quad x86_interrupt_255
